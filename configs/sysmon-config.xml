@@ -1,0 +1,107 @@
+<Sysmon schemaversion="4.90">
+
+  <!-- Sysmon Configuration for Internee.pk Endpoint Monitoring -->
+  <!-- Captures: Process creation, Network connections, File events, Registry changes -->
+
+  <HashAlgorithms>SHA256</HashAlgorithms>
+  <CheckRevocation>False</CheckRevocation>
+
+  <EventFiltering>
+
+    <!-- ==================== PROCESS CREATION (Event ID 1) ==================== -->
+    <!-- Log all process creation. Exclude noisy but safe system processes. -->
+    <RuleGroup name="ProcessCreate" groupRelation="or">
+      <ProcessCreate onmatch="exclude">
+        <Image condition="is">C:\Windows\System32\svchost.exe</Image>
+        <Image condition="is">C:\Windows\System32\WerFault.exe</Image>
+        <Image condition="is">C:\Windows\System32\conhost.exe</Image>
+        <Image condition="is">C:\Windows\System32\wermgr.exe</Image>
+      </ProcessCreate>
+    </RuleGroup>
+
+    <!-- ==================== NETWORK CONNECTIONS (Event ID 3) ==================== -->
+    <!-- Monitor outbound network connections. Exclude known-safe browser traffic. -->
+    <RuleGroup name="NetworkConnect" groupRelation="or">
+      <NetworkConnect onmatch="include">
+        <!-- Flag connections to rare/suspicious ports -->
+        <DestinationPort condition="is">4444</DestinationPort>   <!-- Metasploit default -->
+        <DestinationPort condition="is">1337</DestinationPort>   <!-- Common C2 port -->
+        <DestinationPort condition="is">6666</DestinationPort>
+        <DestinationPort condition="is">31337</DestinationPort>  <!-- Classic hacker port -->
+        <!-- Flag PowerShell making network connections -->
+        <Image condition="end with">powershell.exe</Image>
+        <Image condition="end with">cmd.exe</Image>
+        <Image condition="end with">wscript.exe</Image>
+        <Image condition="end with">cscript.exe</Image>
+        <Image condition="end with">mshta.exe</Image>
+        <Image condition="end with">certutil.exe</Image>
+      </NetworkConnect>
+    </RuleGroup>
+
+    <!-- ==================== FILE CREATION (Event ID 11) ==================== -->
+    <!-- Watch for executable files created in suspicious locations -->
+    <RuleGroup name="FileCreate" groupRelation="or">
+      <FileCreate onmatch="include">
+        <TargetFilename condition="end with">.exe</TargetFilename>
+        <TargetFilename condition="end with">.dll</TargetFilename>
+        <TargetFilename condition="end with">.bat</TargetFilename>
+        <TargetFilename condition="end with">.ps1</TargetFilename>
+        <TargetFilename condition="end with">.vbs</TargetFilename>
+        <TargetFilename condition="end with">.js</TargetFilename>
+        <TargetFilename condition="contains">\Temp\</TargetFilename>
+        <TargetFilename condition="contains">\AppData\Roaming\</TargetFilename>
+        <TargetFilename condition="contains">\Downloads\</TargetFilename>
+      </FileCreate>
+    </RuleGroup>
+
+    <!-- ==================== REGISTRY (Event ID 12, 13, 14) ==================== -->
+    <!-- Monitor persistence-related registry keys -->
+    <RuleGroup name="RegistryEvent" groupRelation="or">
+      <RegistryEvent onmatch="include">
+        <TargetObject condition="contains">CurrentVersion\Run</TargetObject>
+        <TargetObject condition="contains">CurrentVersion\RunOnce</TargetObject>
+        <TargetObject condition="contains">Winlogon</TargetObject>
+        <TargetObject condition="contains">CurrentControlSet\Services</TargetObject>
+        <TargetObject condition="contains">CurrentVersion\Image File Execution Options</TargetObject>
+      </RegistryEvent>
+    </RuleGroup>
+
+    <!-- ==================== PROCESS ACCESS (Event ID 10) ==================== -->
+    <!-- Detect credential dumping attempts (e.g., Mimikatz accessing LSASS) -->
+    <RuleGroup name="ProcessAccess" groupRelation="or">
+      <ProcessAccess onmatch="include">
+        <TargetImage condition="end with">lsass.exe</TargetImage>
+      </ProcessAccess>
+    </RuleGroup>
+
+    <!-- ==================== PIPE EVENTS (Event ID 17, 18) ==================== -->
+    <!-- Detect named pipes used by common malware/C2 frameworks -->
+    <RuleGroup name="PipeEvent" groupRelation="or">
+      <PipeEvent onmatch="include">
+        <PipeName condition="contains">meterpreter</PipeName>
+        <PipeName condition="contains">msagent</PipeName>
+        <PipeName condition="contains">isapi</PipeName>
+      </PipeEvent>
+    </RuleGroup>
+
+    <!-- ==================== DNS QUERIES (Event ID 22) ==================== -->
+    <!-- Log DNS queries — useful for detecting C2 beaconing -->
+    <RuleGroup name="DnsQuery" groupRelation="or">
+      <DnsQuery onmatch="exclude">
+        <!-- Exclude known-good Microsoft domains to reduce noise -->
+        <QueryName condition="end with">.microsoft.com</QueryName>
+        <QueryName condition="end with">.windows.com</QueryName>
+        <QueryName condition="end with">.windowsupdate.com</QueryName>
+      </DnsQuery>
+    </RuleGroup>
+
+    <!-- ==================== DRIVER LOAD (Event ID 6) ==================== -->
+    <!-- Monitor for unsigned or suspicious driver loads -->
+    <RuleGroup name="DriverLoad" groupRelation="or">
+      <DriverLoad onmatch="include">
+        <Signature condition="is">false</Signature>
+      </DriverLoad>
+    </RuleGroup>
+
+  </EventFiltering>
+</Sysmon>
